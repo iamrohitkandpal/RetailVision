@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.Python
+venv/
+.venv/
+*.ipynb
+.ipynb_checkpoints/
+.git/
+*.md
+generate_retail_data.py
+*.csv
+!train_data.csv

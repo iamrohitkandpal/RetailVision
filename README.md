@@ -1,6 +1,11 @@
 # 📈 Retail Vision: AI-Powered Sales Forecasting Platform
 
 <div align="center">
+  <img src="./application-view.png" alt="Retail Vision Dashboard" width="850"/>
+  <p><i>Interactive forecasting dashboard with real-time AI predictions</i></p>
+</div>
+
+<div align="center">
 
 [![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Prophet](https://img.shields.io/badge/Facebook-Prophet-0081FB?style=for-the-badge&logo=meta&logoColor=white)](https://facebook.github.io/prophet/)
