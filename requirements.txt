@@ -4,4 +4,3 @@ numpy>=1.23.0
 plotly>=5.14.0
 prophet>=1.1.1
 scikit-learn>=1.2.0
-pystan==2.19.1.1
