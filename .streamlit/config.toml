@@ -1,8 +1,8 @@
 [theme]
-primaryColor = "#667eea"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f0f2f6"
-textColor = "#262730"
+primaryColor = "#00C853"  # Green for retail/sales
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1E1E1E"
+textColor = "#FFFFFF"
 font = "sans serif"
 
 [client]
@@ -16,6 +16,7 @@ level = "info"
 maxUploadSize = 50
 enableXsrfProtection = true
 enableCORS = false
+headless = true
 
 [browser]
 gatherUsageStats = false
