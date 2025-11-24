@@ -462,6 +462,8 @@ def display_business_insights(forecast, daily_sales, controls):
     last_historical_date = daily_sales['ds'].max()
     future_forecast = forecast[forecast['ds'] > last_historical_date].copy()
     
+    future_forecast = future_forecast.head(controls['forecast_days'])
+    
     insight_days = min(controls['forecast_days'], 7)
     next_days = future_forecast.head(insight_days)
     
@@ -469,6 +471,9 @@ def display_business_insights(forecast, daily_sales, controls):
     
     with col1:
         st.markdown(f"### 📅 Next {insight_days} Days Prediction")
+        
+        if len(next_days) == 0:
+            st.warning("⚠️ No forecast data available. Try increasing forecast days.")
         
         for idx, row in next_days.iterrows():
             day_name = row['ds'].strftime('%A')
@@ -488,22 +493,24 @@ def display_business_insights(forecast, daily_sales, controls):
             
             st.write(f"{icon} **{day_name}** ({date_str}): ~{predicted_sales:,} units - *{label}*")
             
-        full_forecast = forecast.tail(controls['forecast_days'])
-        total_forecast = full_forecast['yhat'].sum()
-        
         if controls['forecast_days'] <= 7:
+            total_forecast = future_forecast['yhat'].sum()
             st.success(f"📊 **Total Next {controls['forecast_days']} Days**: {total_forecast:,.0f} units")
         else:
             weekly_total = next_days['yhat'].sum()
+            full_total = future_forecast['yhat'].sum()
+            
             st.success(f"📊 **Next {insight_days} Days**: {weekly_total:,.0f} units")
-            st.info(f"📊 **Full {controls['forecast_days']}-Day Total**: {total_forecast:,.0f} units")
+            st.success(f"📊 **Full {controls['forecast_days']}-Day Total**: {full_total:,.0f} units")
         
     with col2:
         st.markdown("### 🎯 Recommended Actions")
         
-        # Find peak day
-        full_forecast_days = forecast.tail(controls['forecast_days'])
-        peak_day = full_forecast_days.loc[full_forecast_days['yhat'].idxmax()]
+        if len(future_forecast) == 0:
+            st.warning("⚠️ No forecast data for recommendations")
+            return 
+        
+        peak_day = future_forecast.loc[future_forecast['yhat'].idxmax()]
         peak_day_name = peak_day['ds'].strftime('%A, %d %B %Y')
         peak_sales = int(peak_day['yhat'])
         
@@ -518,7 +525,7 @@ def display_business_insights(forecast, daily_sales, controls):
         - ✅ Prepare for high customer traffic
         """)
         
-        low_day = full_forecast_days.loc[full_forecast_days['yhat'].idxmin()]
+        low_day = future_forecast.loc[future_forecast['yhat'].idxmin()]
         low_name = low_day['ds'].strftime('%A, %d %B %Y')
         low_sales = int(low_day['yhat'])
         
