@@ -591,18 +591,36 @@ def create_business_dashboard(df, forecast, controls):
         st.plotly_chart(fig, use_container_width=True)
             
 # Model performance Function
-@st.cache_data
-def _calculate_model_performance(daily_sales_tuple):
+@st.cache_data(ttl=3600)
+def _calculate_model_performance(daily_sales_dict):
     """Helper function to cache model performance calculations"""
-    daily_sales = pd.DataFrame(daily_sales_tuple)
-    train_size = int(len(daily_sales) * 0.8)
-    train_data = daily_sales[:train_size]
-    test_data = daily_sales[train_size:]
+    daily_sales = pd.DataFrame(daily_sales_dict)
     
-    test_model = Prophet(yearly_seasonality=False)
+    if  'ds' not in daily_sales_dict or 'y' not in daily_sales.columns:
+        raise ValueError("DataFrame must have 'ds' and 'y' columns")
+    
+    daily_sales['ds'] = pd.to_datetime(daily_sales['ds'])
+    daily_sales['y'] = pd.to_numeric(daily_sales['y'])
+    
+    train_size = int(len(daily_sales) * 0.8)
+    train_data = daily_sales[:train_size].copy()
+    test_data = daily_sales[train_size:].copy()
+    
+    if len(train_data) < 2:
+        raise ValueError("Not enough data for training (minimum 2 records)")
+    
+    test_model = Prophet(
+        daily_seasonality=False,
+        weekly_seasonality=True,
+        yearly_seasonality=False,
+        changepoint_prior_scale=0.05
+    )
+    
     test_model.fit(train_data)
+    
     future_test = test_model.make_future_dataframe(periods=len(test_data))
     forecast_test = test_model.predict(future_test)
+    
     return forecast_test, test_data
 
 def display_model_performance(model, daily_sales, controls):
@@ -610,19 +628,36 @@ def display_model_performance(model, daily_sales, controls):
     st.caption("Check prediction accuracy")
     
     # Convert to tuple for caching
-    daily_sales_tuple = tuple(map(tuple, daily_sales.values))
-    forecast_test, test_data = _calculate_model_performance(daily_sales_tuple)
+    daily_sales_dict = daily_sales.to_dict('list')
     
-    y_true = test_data['y'].values if isinstance(test_data, pd.DataFrame) else test_data[:, 1]
+    try:
+        forecast_test, test_data = _calculate_model_performance(daily_sales_dict)
+    except ValueError as e:
+        st.error(f"❌ Cannot calculate performance: {str(e)}")
+        st.info("💡 Need at least 30 days of historical data for accuracy metrics")
+        return
+    except Exception as e:
+        st.error(f"❌ Performance calculation failed: {str(e)}")
+        return        
+    
+    y_true = test_data['y'].values
     y_pred = forecast_test.tail(len(test_data))['yhat'].values
     
     # Ensure both arrays are numpy arrays to avoid type issues
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
+    min_len = min(len(y_true), len(y_pred))
+    y_true = y_true[:min_len]
+    y_pred = y_pred[:min_len]
     
-    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-    mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-    accuracy = 100 - mape
+    # Calculate metrics with error handling
+    try:
+        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+        mape = np.mean(np.abs((y_true - y_pred) / (y_true + 1e-10))) * 100  
+        accuracy = max(0, 100 - mape)
+    except Exception as e:
+        st.error(f"❌ Metric calculation failed: {str(e)}")
+        return
+        
+        
     
     col1, col2, col3 = st.columns(3)
     
@@ -650,7 +685,7 @@ def display_model_performance(model, daily_sales, controls):
     
     with col2:
         avg_sales = daily_sales['y'].mean()
-        error_percent = (rmse / avg_sales) * 100
+        error_percent = (rmse / avg_sales + (1e-10)) * 100
         
         st.metric(
             label="Average Error Range",  
