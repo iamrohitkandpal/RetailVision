@@ -26,47 +26,98 @@ st.set_page_config(
 # Custom CSS Styling
 st.markdown("""
 <style>
-    /* Main container styling */
-    .main > div {
-        padding-top: 2rem;
+    /* Modern card design */
+    div[data-testid="stMetricValue"] {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #386DEC !important;
+        background: none !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
     }
     
-    /* Custom metric cards */
-    .metric-container {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-        margin: 0.5rem 0;
-    }
-    
-    /* Success message styling */
-    .success-message {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        border-radius: 8px;
-        padding: 12px;
-        margin: 10px 0;
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg {  /* Streamlit sidebar class */
-        background-color: #f0f2f6;
-    }
-    
-    /* Button hover effects */
+    /* Enhanced button styling - better visibility */
     .stButton > button {
-        transition: all 0.3s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 8px;
+        background-color: #667eea !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        border: 2px solid #667eea !important;
+        padding: 10px 20px !important;
     }
+    
     .stButton > button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4) !important;
+        background-color: #5568d3 !important;
+        border-color: #5568d3 !important;
     }
     
+    /* Primary button (type=primary) */
+    .stButton > button[kind="primary"] {
+        background-color: #667eea !important;
+        color: #ffffff !important;
+    }
+    
+    .stButton > button[kind="primary"]:hover {
+        background-color: #5568d3 !important;
+    }
+    
+    /* Modern tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 4px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-weight: 600;
+        color: #333333 !important;
+    }
+    
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: #667eea !important;
+        color: #ffffff !important;
+    }
+    
+    /* Icon styling - ensure visibility */
+    .stIcon {
+        color: #333333 !important;
+    }
+    
+    /* Expander styling */
     .streamlit-expanderHeader {
-        font-size: 14px !important;
+        background-color: #f0f2f6 !important;
+        color: #333333 !important;
         font-weight: 600 !important;
+    }
+    
+    /* Download button styling */
+    .stDownloadButton > button {
+        background-color: #27ae60 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    
+    .stDownloadButton > button:hover {
+        background-color: #229954 !important;
+    }
+    
+    /* Hide scrollbar but keep functionality */
+    .main::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .main::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    
+    .main::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -499,10 +550,7 @@ def display_business_insights(forecast, daily_sales, controls):
         
     tabs = st.tabs(tabs_to_show)
     
-    # ════════════════════════════════════════════════════════════
-    # TAB 1: DAILY INSIGHTS (Always shown)
-    # ════════════════════════════════════════════════════════════
-    
+    # TAB 1: DAILY (existing code)
     with tabs[0]:
         st.markdown("### 📅 Next 7 Days Detailed Forecast")
         
@@ -577,11 +625,9 @@ def display_business_insights(forecast, daily_sales, controls):
                 - 📣 Social media promotions
                 """)
                 
-    # ════════════════════════════════════════════════════════════
-    # TAB 2: WEEKLY INSIGHTS (28+ days)
-    # ════════════════════════════════════════════════════════════
+    # TAB 2: WEEKLY - FIXED VERSION
     if controls['forecast_days'] >= 28:
-        with tabs[1]:
+        with tabs[1]:  # ✅ IMPORTANT: All weekly content MUST be inside this block
             st.markdown("### 📊 Weekly Performance Forecast")
             
             future_forecast['week_start'] = future_forecast['ds'] - pd.to_timedelta(
@@ -596,201 +642,174 @@ def display_business_insights(forecast, daily_sales, controls):
             
             num_weeks = len(weekly_forecast)
             
-            if num_weeks <= 8:
-                col_layout = st.columns([2,1])
-                use_grid = False
-            else:
-                use_grid = True
-            
-            # ════════════════════════════════════════════════════
-        # LAYOUT 1: Traditional (≤8 weeks)
-        # ════════════════════════════════════════════════════
-        if not use_grid:
-            col1, col2 = col_layout
-            
-            with col1:
-                st.markdown(f"#### 📈 Weekly Breakdown ({num_weeks} weeks)")
+            # ✅ IMPROVED GRID LAYOUT (Less Suffocated)
+            if num_weeks > 8:
+                st.markdown(f"#### 📈 {num_weeks}-Week Overview")
                 
-                for idx, row in weekly_forecast.iterrows():
-                    week_start = row['week_start'].strftime('%d %b')
-                    week_end = (row['week_start'] + pd.Timedelta(days=6)).strftime('%d %b %Y')
-                    weekly_sales = int(row['yhat'])
-                    
-                    if idx > 0:
-                        prev_week = int(weekly_forecast.iloc[idx-1]['yhat'])
-                        growth = ((weekly_sales - prev_week) / (prev_week + 1e-10)) * 100
-                        
-                        if growth > 5:
-                            trend = f"📈 +{growth:.1f}%"
-                        elif growth < -5:
-                            trend = f"📉 {growth:.1f}%"
-                        else:
-                            trend = f"➡️ {growth:+.1f}%"
-                    else:
-                        trend = "🔵 Baseline"
-                        
-                    st.markdown(f"""
-                    **Week {idx+1}**: {week_start} - {week_end}  
-                    💰 **{weekly_sales:,}** units | {trend}
-                    """)
+                # Summary at top
+                col1, col2, col3, col4 = st.columns(4)
                 
                 total_forecast = weekly_forecast['yhat'].sum()
-                st.success(f"📊 **Total {num_weeks}-Week Forecast**: {total_forecast:,.0f} units")
-                
-            with col2:
-                st.markdown("#### 🎯 Weekly Strategy")
-                
+                avg_weekly = weekly_forecast['yhat'].mean()
                 best_week = weekly_forecast.loc[weekly_forecast['yhat'].idxmax()]
                 worst_week = weekly_forecast.loc[weekly_forecast['yhat'].idxmin()]
+                
+                with col1:
+                    st.metric("📊 Total", f"{total_forecast:,.0f}")
+                with col2:
+                    st.metric("📈 Avg/Week", f"{avg_weekly:,.0f}")
+                with col3:
+                    st.metric("🔥 Peak", f"{int(best_week['yhat']):,}")
+                with col4:
+                    st.metric("📉 Low", f"{int(worst_week['yhat']):,}")
+                
+                st.markdown("---")
+                st.markdown("#### 📅 Week-by-Week Breakdown")
+                
+                # ✅ LESS CRAMPED: 2 columns instead of 3
+                cols_per_row = 2
+                for i in range(0, num_weeks, cols_per_row):
+                    cols = st.columns(cols_per_row)
+                    
+                    for j in range(cols_per_row):
+                        idx = i + j
+                        if idx >= num_weeks:
+                            break
+                        
+                        row = weekly_forecast.iloc[idx]
+                        week_start = row['week_start'].strftime('%d %b')
+                        week_end = (row['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')
+                        weekly_sales = int(row['yhat'])
+                        
+                        if idx > 0:
+                            prev = int(weekly_forecast.iloc[idx-1]['yhat'])
+                            growth = ((weekly_sales - prev) / prev) * 100
+                            delta = f"{growth:+.1f}%"
+                            delta_color = "normal" if growth > 0 else "inverse"
+                        else:
+                            delta = "Baseline"
+                            delta_color = "off"
+                        
+                        with cols[j]:
+                            st.metric(
+                                label=f"**Week {idx+1}**",
+                                value=f"{weekly_sales:,} units",
+                                delta=delta,
+                                delta_color=delta_color
+                            )
+                            st.caption(f"📅 {week_start} - {week_end}")
                             
-                best_week_num = weekly_forecast[weekly_forecast['yhat'] == best_week['yhat']].index[0] + 1
-                worst_week_num = weekly_forecast[weekly_forecast['yhat'] == worst_week['yhat']].index[0] + 1
+                            # ✅ ADD BREATHING ROOM
+                            st.markdown("<div style='margin-bottom: 16px;'></div>", 
+                                      unsafe_allow_html=True)
                 
-                st.success(f"""
-                **🏆 Best Week: #{best_week_num}**  
-                {best_week['week_start'].strftime('%d %b')} - {(best_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')}  
-                Expected: ~{int(best_week['yhat']):,} units
+                st.markdown("---")
                 
-                **Prepare:**
-                - 📦 Order {int(best_week['yhat'] * 1.15):,} units
-                - 👥 Full staff roster
-                - 🚚 Extra delivery
-                """)
+                # Strategic recommendations
+                col1, col2 = st.columns(2)
                 
-                st.warning(f"""
-                **⚠️ Slowest Week: #{worst_week_num}**  
-                {worst_week['week_start'].strftime('%d %b')} - {(worst_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')}  
-                Expected: ~{int(worst_week['yhat']):,} units
-                
-                **Actions:**
-                - 💰 Weekly promotion
-                - 🎁 Loyalty boost
-                - 📧 Email campaign
-                """)
-        
-        # ════════════════════════════════════════════════════
-        # LAYOUT 2: Grid (>8 weeks) - PREVENTS VERTICAL SCROLL
-        # ════════════════════════════════════════════════════
-        else:
-            st.markdown(f"#### 📈 {num_weeks}-Week Overview")
-            
-            # Summary metrics at top
-            col1, col2, col3, col4 = st.columns(4)
-            
-            total_forecast = weekly_forecast['yhat'].sum()
-            avg_weekly = weekly_forecast['yhat'].mean()
-            best_week = weekly_forecast.loc[weekly_forecast['yhat'].idxmax()]
-            worst_week = weekly_forecast.loc[weekly_forecast['yhat'].idxmin()]
-            
-            with col1:
-                st.metric("📊 Total Forecast", f"{total_forecast:,.0f} units")
-            with col2:
-                st.metric("📈 Avg Per Week", f"{avg_weekly:,.0f} units")
-            with col3:
-                st.metric("🔥 Peak Week", f"{int(best_week['yhat']):,} units", 
-                         delta=f"Week {weekly_forecast[weekly_forecast['yhat'] == best_week['yhat']].index[0] + 1}")
-            with col4:
-                st.metric("📉 Low Week", f"{int(worst_week['yhat']):,} units",
-                         delta=f"Week {weekly_forecast[weekly_forecast['yhat'] == worst_week['yhat']].index[0] + 1}")
-            
-            st.markdown("---")
-            
-            # ✅ GRID LAYOUT: 3 columns per row
-            st.markdown("#### 📅 Week-by-Week Breakdown")
-            
-            cols_per_row = 3
-            for i in range(0, num_weeks, cols_per_row):
-                cols = st.columns(cols_per_row)
-                
-                for j in range(cols_per_row):
-                    idx = i + j
-                    if idx >= num_weeks:
-                        break
+                with col1:
+                    best_week_num = weekly_forecast[
+                        weekly_forecast['yhat'] == best_week['yhat']
+                    ].index[0] + 1
                     
-                    row = weekly_forecast.iloc[idx]
-                    week_start = row['week_start'].strftime('%d %b')
-                    week_end = (row['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')
-                    weekly_sales = int(row['yhat'])
+                    st.success(f"""
+                    **🏆 Peak Week #{best_week_num}**  
+                    {best_week['week_start'].strftime('%d %b')} - {
+                        (best_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')
+                    }  
+                    Expected: **{int(best_week['yhat']):,}** units
                     
-                    # Calculate growth
-                    if idx > 0:
-                        prev_week = int(weekly_forecast.iloc[idx-1]['yhat'])
-                        growth = ((weekly_sales - prev_week) / (prev_week + 1e-10)) * 100
-                        delta = f"{growth:+.1f}%"
-                        delta_color = "normal" if growth > 0 else "inverse"
-                    else:
-                        delta = "Baseline"
-                        delta_color = "off"
+                    **Actions:**
+                    - 📦 +{int(best_week['yhat'] * 0.2):,} safety stock
+                    - 👥 Full team roster
+                    - 🚚 Extra delivery slots
+                    """)
+                
+                with col2:
+                    worst_week_num = weekly_forecast[
+                        weekly_forecast['yhat'] == worst_week['yhat']
+                    ].index[0] + 1
                     
-                    with cols[j]:
-                        st.metric(
-                            label=f"Week {idx+1}",
-                            value=f"{weekly_sales:,} units",
-                            delta=delta,
-                            delta_color=delta_color,
-                            help=f"{week_start} - {week_end}"
-                        )
-                        st.caption(f"📅 {week_start} - {week_end}")
+                    st.warning(f"""
+                    **📊 Recovery Week #{worst_week_num}**  
+                    {worst_week['week_start'].strftime('%d %b')} - {
+                        (worst_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')
+                    }  
+                    Expected: **{int(worst_week['yhat']):,}** units
+                    
+                    **Boost:**
+                    - 💰 Week-long promo
+                    - 🎁 Loyalty 2x points
+                    - 📧 Email blast
+                    """)
             
-            st.markdown("---")
-            
-            # Strategic recommendations
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                best_week_num = weekly_forecast[weekly_forecast['yhat'] == best_week['yhat']].index[0] + 1
+            else:  # ≤8 weeks - traditional layout
+                col1, col2 = st.columns(2)
                 
-                st.success(f"""
-                **🏆 Peak Performance Week**  
-                **Week #{best_week_num}** ({best_week['week_start'].strftime('%d %b')} - {(best_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')})  
-                Expected: ~{int(best_week['yhat']):,} units
-                
-                **Strategic Actions:**
-                - 📦 Increase inventory by {int(best_week['yhat'] * 0.2):,} units
-                - 👥 Schedule full staff roster
-                - 🚚 Arrange extra delivery capacity
-                - 💰 Consider premium pricing
-                """)
-            
-            with col2:
-                worst_week_num = weekly_forecast[weekly_forecast['yhat'] == worst_week['yhat']].index[0] + 1
-                
-                st.warning(f"""
-                **📊 Recovery Opportunity**  
-                **Week #{worst_week_num}** ({worst_week['week_start'].strftime('%d %b')} - {(worst_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')})  
-                Expected: ~{int(worst_week['yhat']):,} units
-                
-                **Boost Sales:**
-                - 💰 Launch week-long promotion
-                - 🎁 Activate loyalty rewards
-                - 📧 Send targeted email campaigns
-                - 🔄 Clear slow-moving inventory
-                """)
-            
-            # Trend analysis
-            st.markdown("#### 📈 Trend Analysis")
-            
-            # Calculate overall trend
-            first_half_avg = weekly_forecast.iloc[:num_weeks//2]['yhat'].mean()
-            second_half_avg = weekly_forecast.iloc[num_weeks//2:]['yhat'].mean()
-            overall_trend = ((second_half_avg - first_half_avg) / first_half_avg) * 100
-            
-            if overall_trend > 10:
-                st.success(f"📈 **Strong Growth Trend** (+{overall_trend:.1f}%)")
-                st.write("→ Sales increasing steadily - consider expanding capacity")
-            elif overall_trend > 0:
-                st.info(f"➡️ **Stable Growth** (+{overall_trend:.1f}%)")
-                st.write("→ Maintain current strategy and operations")
-            else:
-                st.warning(f"📉 **Declining Trend** ({overall_trend:.1f}%)")
-                st.write("→ Review pricing, promotions, and market conditions")
-                
+                with col1:
+                    st.markdown(f"#### 📈 Weekly Breakdown ({num_weeks} weeks)")
+                    
+                    for idx, row in weekly_forecast.iterrows():
+                        week_start = row['week_start'].strftime('%d %b')
+                        week_end = (row['week_start'] + pd.Timedelta(days=6)).strftime('%d %b %Y')
+                        weekly_sales = int(row['yhat'])
+                        
+                        if idx > 0:
+                            prev_week = int(weekly_forecast.iloc[idx-1]['yhat'])
+                            growth = ((weekly_sales - prev_week) / (prev_week + 1e-10)) * 100
+                            
+                            if growth > 5:
+                                trend = f"📈 +{growth:.1f}%"
+                            elif growth < -5:
+                                trend = f"📉 {growth:.1f}%"
+                            else:
+                                trend = f"➡️ {growth:+.1f}%"
+                        else:
+                            trend = "🔵 Baseline"
+                            
+                        st.markdown(f"""
+                        **Week {idx+1}**: {week_start} - {week_end}  
+                        💰 **{weekly_sales:,}** units | {trend}
+                        """)
+                    
+                    total_forecast = weekly_forecast['yhat'].sum()
+                    st.success(f"📊 **Total {num_weeks}-Week Forecast**: {total_forecast:,.0f} units")
+                    
+                with col2:
+                    st.markdown("#### 🎯 Weekly Strategy")
+                    
+                    best_week = weekly_forecast.loc[weekly_forecast['yhat'].idxmax()]
+                    worst_week = weekly_forecast.loc[weekly_forecast['yhat'].idxmin()]
+                                
+                    best_week_num = weekly_forecast[weekly_forecast['yhat'] == best_week['yhat']].index[0] + 1
+                    worst_week_num = weekly_forecast[weekly_forecast['yhat'] == worst_week['yhat']].index[0] + 1
+                    
+                    st.success(f"""
+                    **🏆 Best Week: #{best_week_num}**  
+                    {best_week['week_start'].strftime('%d %b')} - {(best_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')}  
+                    Expected: ~{int(best_week['yhat']):,} units
+                    
+                    **Prepare:**
+                    - 📦 Order {int(best_week['yhat'] * 1.15):,} units
+                    - 👥 Full staff roster
+                    - 🚚 Extra delivery
+                    """)
+                    
+                    st.warning(f"""
+                    **⚠️ Slowest Week: #{worst_week_num}**  
+                    {worst_week['week_start'].strftime('%d %b')} - {(worst_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')}  
+                    Expected: ~{int(worst_week['yhat']):,} units
+                    
+                    **Actions:**
+                    - 💰 Weekly promotion
+                    - 🎁 Loyalty boost
+                    - 📧 Email campaign
+                    """)
     
-    # ════════════════════════════════════════════════════════════
-    # TAB 3: MONTHLY INSIGHTS (60+ days)
-    # ════════════════════════════════════════════════════════════
+    # TAB 3: MONTHLY (existing code)
     if controls['forecast_days'] >= 60:
-        with tabs[2]:
+        with tabs[2]:  # ✅ Make sure it's tabs[2], not tabs[1]
             st.markdown("### 📅 Monthly Performance Forecast")
             
             future_forecast['month'] = future_forecast['ds'].dt.to_period('M')
@@ -879,11 +898,9 @@ def display_business_insights(forecast, daily_sales, controls):
                 - 🔄 Inventory clearance
                 """)
                 
-    # ════════════════════════════════════════════════════════════
-    # TAB 4: QUARTERLY INSIGHTS (180+ days)
-    # ════════════════════════════════════════════════════════════
+    # TAB 4: QUARTERLY (existing code)
     if controls['forecast_days'] >= 180:
-        with tabs[3]:
+        with tabs[3]:  # ✅ Make sure it's tabs[3]
             st.markdown("### 📅 Quarterly Performance Forecast")
             
             future_forecast['quarter'] = future_forecast['ds'].dt.to_period('Q')
@@ -1017,12 +1034,37 @@ def create_business_dashboard(df, forecast, controls):
     
     col1, col2, col3, col4 = st.columns(4)
     
-    df['revenue_per_unit'] = df['total_price'] / df['units_sold']
-    revenue_per_unit = (df['total_price'].sum() / df['units_sold'].sum())
+    # Calculate revenue per unit correctly
+    # Handle missing or zero total_price column
+    revenue_per_unit = 0
+    
+    # Try total_price first
+    if 'total_price' in df.columns:
+        valid_prices = df['total_price'].dropna()
+        if len(valid_prices) > 0 and valid_prices.sum() > 0:
+            total_revenue = valid_prices.sum()
+            total_units = df['units_sold'].sum()
+            revenue_per_unit = total_revenue / total_units if total_units > 0 else 0
+    
+    # Fallback to base_price if total_price didn't work
+    if revenue_per_unit == 0 and 'base_price' in df.columns:
+        valid_base = df['base_price'].dropna()
+        if len(valid_base) > 0 and valid_base.sum() > 0:
+            revenue_per_unit = valid_base.mean()
+    
+    # Last resort: default estimate
+    if revenue_per_unit == 0:
+        revenue_per_unit = 75.0
     
     last_historical_date = df['date'].max()
     future_forecast = forecast[forecast['ds'] > last_historical_date].head(controls['forecast_days'])
-    forecast_revenue = future_forecast['yhat'].sum() * revenue_per_unit
+    
+    # DEBUG: Check if future_forecast is empty
+    if len(future_forecast) == 0:
+        # Fallback: use tail of forecast if filtering by date fails
+        future_forecast = forecast.tail(controls['forecast_days']).copy()
+    
+    forecast_revenue = future_forecast['yhat'].sum() * revenue_per_unit if revenue_per_unit > 0 else 0
     
     with col1:
         st.metric(
