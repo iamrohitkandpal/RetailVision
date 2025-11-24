@@ -189,6 +189,12 @@ def load_and_prepare_data_with_upload(uploaded_file):
     
     except Exception as e:
         st.error(f"❌ Error processing file: {str(e)}")
+        st.info("""
+💡      **Troubleshooting:**
+        - Check file format (must be CSV)
+        - Verify column names match requirements
+        - Ensure no special characters in data
+        """)
         return None, None
     
 def handle_large_files(df):
@@ -254,7 +260,8 @@ def train_forecasting_model(daily_sales, model_type='default', confidence_level=
             interval_width=confidence_level / 100,
             changepoint_prior_scale=0.05
         )
-        model.add_country_holidays(country_name='IN')
+        country = st.selectbox("Holiday Region:", ["IN", "US", "UK", "AU"])
+        model.add_country_holidays(country_name=country)
         st.info("✅ Holiday-aware model enabled")
     elif model_type == "Prophet Enhanced":
         model = Prophet(
@@ -456,90 +463,423 @@ def create_enhanced_forecast_chart(daily_sales, model, controls):
 
 # Business Insights Function
 def display_business_insights(forecast, daily_sales, controls):
-    st.subheader("💡 What You Should Do?")
+    st.subheader("💡 Business Insights & Recommendations")
     st.caption("Simple actions based on predictions")
     
-    last_historical_date = daily_sales['ds'].max()
-    future_forecast = forecast[forecast['ds'] > last_historical_date].copy()
+    total_forecast_length = len(forecast)
+    historical_length = len(daily_sales)
     
-    future_forecast = future_forecast.head(controls['forecast_days'])
+    future_forecast = forecast.tail(controls['forecast_days']).copy().reset_index(drop=True)
     
-    insight_days = min(controls['forecast_days'], 7)
-    next_days = future_forecast.head(insight_days)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown(f"### 📅 Next {insight_days} Days Prediction")
+    if len(future_forecast) == 0:
+        st.error("❌ No forecast data generated!")
+        st.info("""
+        **Possible causes:**
+        - Forecast period is 0 days
+        - Model training failed
+        - Data processing error
         
-        if len(next_days) == 0:
-            st.warning("⚠️ No forecast data available. Try increasing forecast days.")
+        **Try:**
+        - Refresh the page
+        - Check your forecast settings
+        - Upload data again
+        """)
+        return
+    
+    tabs_to_show = ["📅 Daily (7d)"]
+    
+    if controls['forecast_days'] >= 28:
+        tabs_to_show.append("📊 Weekly")
         
-        for idx, row in next_days.iterrows():
-            day_name = row['ds'].strftime('%A')
-            date_str = row['ds'].strftime('%d %b %Y')
-            predicted_sales = int(row['yhat'])
+    if controls['forecast_days'] >= 60:
+        tabs_to_show.append("📅 Monthly")
+    
+    if controls['forecast_days'] >= 180:
+        tabs_to_show.append("🗓️ Quarterly")
+        
+    tabs = st.tabs(tabs_to_show)
+    
+    # ════════════════════════════════════════════════════════════
+    # TAB 1: DAILY INSIGHTS (Always shown)
+    # ════════════════════════════════════════════════════════════
+    
+    with tabs[0]:
+        st.markdown("### 📅 Next 7 Days Detailed Forecast")
+        
+        col1, col2 = st.columns(2)
+    
+        with col1:
+            st.markdown(f"#### 📊 Day-by-Day Breakdown")
+
+            insight_days = min(controls['forecast_days'], 7)
+            next_days = future_forecast.head(insight_days)
             
-            # Simple visual indicator
-            if predicted_sales > daily_sales['y'].mean() * 1.1:
-                icon = "🔥"
-                label = "High Sales Day"
-            elif predicted_sales < daily_sales['y'].mean() * 0.9:
-                icon = "📉"
-                label = "Low Sales Day"
+            if len(next_days) == 0:
+                st.warning("⚠️ No daily data available")
             else:
-                icon = "➡️"
-                label = "Normal Day"
+                for idx, row in next_days.iterrows():
+                    day_name = row['ds'].strftime('%A')
+                    date_str = row['ds'].strftime('%d %b %Y')
+                    predicted_sales = int(row['yhat'])
+
+                    # Simple visual indicator
+                    if predicted_sales > daily_sales['y'].mean() * 1.1:
+                        icon = "🔥"
+                        label = "High Sales Day"
+                        color = "🟢"
+                    elif predicted_sales < daily_sales['y'].mean() * 0.9:
+                        icon = "📉"
+                        label = "Low Sales Day"
+                        color = "🔴"
+                    else:
+                        icon = "➡️"
+                        label = "Normal Day"
+                        color = "🟡"
+
+                    st.write(f"""{icon} **{day_name}** ({date_str}): ~**{predicted_sales:,}** units - *{label}*""")
+
+                if controls['forecast_days'] <= 7:
+                    total_forecast = future_forecast['yhat'].sum()
+                    st.success(f"📊 **Total Next {controls['forecast_days']} Days**: {total_forecast:,.0f} units")
+                else:
+                    weekly_total = next_days['yhat'].sum()
+                    full_total = future_forecast['yhat'].sum()
+
+                    st.success(f"📊 **Next {insight_days} Days**: {weekly_total:,.0f} units")
+                    st.info(f"📊 **Full {controls['forecast_days']}-Day Total**: {full_total:,.0f} units")
+
+        with col2:
+            st.markdown("#### 🎯 Recommended Actions")
+
+            if len(next_days) > 0:
+                peak_day_7 = next_days.loc[next_days['yhat'].idxmax()]
+                low_day_7 = next_days.loc[next_days['yhat'].idxmin()]
+
+                st.success(f"""
+                **🔥 Peak Day This Week**  
+                {peak_day_7['ds'].strftime('%A, %d %B %Y')}  
+                Expected: ~{int(peak_day_7['yhat']):,} units
+                
+                **Actions:**
+                - ✅ Stock extra {int(peak_day_7['yhat'] * 0.2):,} units
+                - ✅ Schedule +2 staff members
+                - ✅ Prepare checkout stations
+                """)
+                
+                st.info(f"""
+                **📉 Slowest Day This Week**  
+                {low_day_7['ds'].strftime('%A, %d %B %Y')}  
+                Expected: ~{int(low_day_7['yhat']):,} units
+                
+                **Actions:**
+                - 🎯 Run flash sale (15-20% off)
+                - 💰 Bundle offers on slow items
+                - 📣 Social media promotions
+                """)
+                
+    # ════════════════════════════════════════════════════════════
+    # TAB 2: WEEKLY INSIGHTS (28+ days)
+    # ════════════════════════════════════════════════════════════
+    if controls['forecast_days'] >= 28:
+        with tabs[1]:
+            st.markdown("### 📊 Weekly Performance Forecast")
             
-            st.write(f"{icon} **{day_name}** ({date_str}): ~{predicted_sales:,} units - *{label}*")
+            future_forecast['week_start'] = future_forecast['ds'] - pd.to_timedelta(
+                future_forecast['ds'].dt.dayofweek, unit='D'
+            )
             
-        if controls['forecast_days'] <= 7:
-            total_forecast = future_forecast['yhat'].sum()
-            st.success(f"📊 **Total Next {controls['forecast_days']} Days**: {total_forecast:,.0f} units")
-        else:
-            weekly_total = next_days['yhat'].sum()
-            full_total = future_forecast['yhat'].sum()
+            weekly_forecast = future_forecast.groupby('week_start').agg({
+                'yhat': 'sum',
+                'yhat_lower': 'sum',
+                'yhat_upper': 'sum'
+            }).reset_index()
             
-            st.success(f"📊 **Next {insight_days} Days**: {weekly_total:,.0f} units")
-            st.success(f"📊 **Full {controls['forecast_days']}-Day Total**: {full_total:,.0f} units")
+            num_weeks = len(weekly_forecast)
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                st.markdown(f"#### 📈 Weekly Breakdown ({num_weeks} weeks)")
+                
+                for idx, row in weekly_forecast.iterrows():
+                    week_start = row['week_start'].strftime('%d %b')
+                    week_end = (row['week_start'] + pd.Timedelta(days=6)).strftime('%d %b %Y')
+                    weekly_sales = int(row['yhat'])
+                    
+                    if idx > 0:
+                        prev_week = int(weekly_forecast.iloc[idx-1]['yhat'])
+                        growth = ((weekly_sales - prev_week) / (prev_week + 1e-10)) * 100
+                        
+                        if growth > 5:
+                            trend = f"📈 +{growth:.1f}%"
+                        elif growth < -5:
+                            trend = f"📉 {growth:.1f}%"
+                        else:
+                            trend = f"➡️ {growth:+.1f}%"
+                    else:
+                        trend = "🔵 Baseline"
+                        
+                    st.markdown(f"""
+                    **Week {idx+1}**: {week_start} - {week_end}  
+                    💰 **{weekly_sales:,}** units | {trend}
+                    """)
+                
+                total_forecast = weekly_forecast['yhat'].sum()
+                st.success(f"📊 **Total {num_weeks}-Week Forecast**: {total_forecast:,.0f} units")
+                
+            with col2:
+                st.markdown("#### 🎯 Weekly Strategy")
+                
+                best_week = weekly_forecast.loc[weekly_forecast['yhat'].idxmax()]
+                worst_week = weekly_forecast.loc[weekly_forecast['yhat'].idxmin()]
+                            
+                best_week_num = weekly_forecast[weekly_forecast['yhat'] == best_week['yhat']].index[0] + 1
+                worst_week_num = weekly_forecast[weekly_forecast['yhat'] == worst_week['yhat']].index[0] + 1
+                
+                st.success(f"""
+                **🏆 Best Week: #{best_week_num}**
+                {best_week['week_start'].strftime('%d %b')} - {(best_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')}
+                Expected: ~{int(best_week['yhat']):,} units
+                
+                **Prepare:**
+                - 📦 Order {int(best_week['yhat'] * 1.15):,} units
+                - 👥 Full staff roster
+                - 🚚 Extra delivery
+                """)
+                
+                st.warning(f"""
+                    **⚠️ Slowest Week: #{worst_week_num}**  
+                {worst_week['week_start'].strftime('%d %b')} - {(worst_week['week_start'] + pd.Timedelta(days=6)).strftime('%d %b')}  
+                Expected: ~{int(worst_week['yhat']):,} units
+                
+                **Actions:**
+                - 💰 Weekly promotion
+                - 🎁 Loyalty boost
+                - 📧 Email campaign
+                """)
+    
+    # ════════════════════════════════════════════════════════════
+    # TAB 3: MONTHLY INSIGHTS (60+ days)
+    # ════════════════════════════════════════════════════════════
+    if controls['forecast_days'] >= 60:
+        with tabs[2]:
+            st.markdown("### 📅 Monthly Performance Forecast")
+            
+            future_forecast['month'] = future_forecast['ds'].dt.to_period('M')
+            
+            monthly_forecast = future_forecast.groupby('month').agg({
+                'yhat': 'sum',
+                'yhat_lower': 'sum',
+                'yhat_upper': 'sum'
+            }).reset_index()
+            
+            monthly_forecast['month_name'] = monthly_forecast['month'].dt.strftime('%B %Y')
+            
+            num_months = len(monthly_forecast)
+            
+            col1, col2 = st.columns([3, 2])
+            
+            with col1:
+                st.markdown(f"#### 📈 Monthly Breakdown ({num_months} months)")
+                
+                for idx, row in monthly_forecast.iterrows():
+                    month_name = row['month_name']
+                    monthly_sales = int(row['yhat'])
+                    lower = int(row['yhat_lower'])
+                    upper = int(row['yhat_upper'])
+                    
+                    if idx > 0:
+                        prev = int(monthly_forecast.iloc[idx-1]['yhat'])
+                        growth = ((monthly_sales - prev) / prev) * 100
+                        
+                        if growth > 10:
+                            icon = "🚀"
+                            status = "Strong Growth"
+                        elif growth > 0:
+                            icon = "📈"
+                            status = "Growing"
+                        else:
+                            icon = "📉"
+                            status = "Declining"
+                        
+                        trend = f"{icon} {growth:+.1f}% - {status}"
+                    else:
+                        trend = "🔵 Baseline"
+                        
+                    st.markdown(f"""
+                    **{month_name}**
+                    💰 **{monthly_sales:,}** units (Range: {lower:,} - {upper:,})
+                    {trend}
+                    """)
+                    st.markdown("---")
+                
+                total = monthly_forecast['yhat'].sum()
+                avg = monthly_forecast['yhat'].mean()
+                
+                st.success(f"""
+                📊 **Total {num_months}-Month**: {total:,.0f} units  
+                📈 **Avg Per Month**: {avg:,.0f} units
+                """)
+                
+            with col2:
+                st.markdown("#### 🎯 Monthly Strategy")
+                
+                best = monthly_forecast.loc[monthly_forecast['yhat'].idxmax()]
+                worst = monthly_forecast.loc[monthly_forecast['yhat'].idxmin()]
+                
+                st.success(f"""
+                **🏆 Best Month:**
+                {best['month_name']}
+                Expected: ~{int(best['yhat']):,} units
+                
+                **Strategic Actions:**
+                - 📦 Secure {int(best['yhat'] * 1.2):,} units
+                - 💼 Bulk supplier deals
+                - 👥 Hire seasonal staff
+                - 📈 Max marketing budget
+                """)
+                
+                st.info(f"""
+                **📊 Lowest Month**  
+                {worst['month_name']}  
+                Expected: ~{int(worst['yhat']):,} units
+                
+                **Recovery Plan:**
+                - 💰 Month-long sale
+                - 🎁 Retention programs
+                - 📧 Re-engagement
+                - 🔄 Inventory clearance
+                """)
+                
+    # ════════════════════════════════════════════════════════════
+    # TAB 4: QUARTERLY INSIGHTS (180+ days)
+    # ════════════════════════════════════════════════════════════
+    if controls['forecast_days'] >= 180:
+        with tabs[3]:
+            st.markdown("### 📅 Quarterly Performance Forecast")
+            
+            future_forecast['quarter'] = future_forecast['ds'].dt.to_period('Q')
+            
+            quarterly_forecast = future_forecast.groupby('quarter').agg({
+                'yhat': 'sum',
+                'yhat_lower': 'sum',
+                'yhat_upper': 'sum',
+            }).reset_index()
+            
+            quarterly_forecast['quarter_name'] = quarterly_forecast['quarter'].astype(str)
+            
+            num_quarters = len(quarterly_forecast)
+            
+            st.markdown(f"#### 📊 Quarterly Performance ({num_quarters} quarters)")
+            
+            cols = st.columns(min(num_quarters, 3))
+            
+            for idx, row in quarterly_forecast.iterrows():
+                qtr_name = row['quarter_name']
+                qtr_sales = int(row['yhat'])
+                lower = int(row['yhat_lower'])
+                upper = int(row['yhat_upper'])
+            
+                parts = qtr_name.split('Q')
+                year = parts[0]
+                qtr = f"Q{parts[1]}"
+                
+                if idx > 0:
+                    prev = int(quarterly_forecast.iloc[idx-1]['yhat'])
+                    growth = ((qtr_sales - prev) / prev) * 100
+                    delta = f"{growth:+.1f}%"
+                    delta_color = "normal" if growth > 0 else "inverse"
+                else:
+                    delta = "Baseline"
+                    delta_color = "off"
+                    
+                with cols[idx % 3]:
+                    st.metric(
+                        label=f"{qtr} {year}",
+                        value=f"{qtr_sales:,} units",
+                        delta=delta,
+                        delta_color=delta_color
+                    )
+                    st.caption(f"Range: {lower:,} - {upper:,}")
+                    
+            st.markdown("---")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 🎯 Quarterly Plan")
+                
+                best = quarterly_forecast.loc[quarterly_forecast['yhat'].idxmax()]
+                worst = quarterly_forecast.loc[quarterly_forecast['yhat'].idxmin()]
+                
+                st.success(f"""
+                **🏆 Strongest: {best['quarter_name']}**
+                Expected: ~{int(best['yhat']):,} units
+                
+                **Strategic Initiatives:**
+                - 💼 Negotiate annual supplier contracts   
+                - 📦 Reserve warehouse capacity         
+                - 👥 Seasonal hiring (3mo ahead)         
+                - 💰 Max marketing
+                - 🚚 Logistics partnerships
+                """)
+                
+                st.warning(f"""
+                **📊 Weakest: {worst['quarter_name']}**  
+                Expected: ~{int(worst['yhat']):,} units
+                
+                **Recovery:**
+                - 💰 Quarterly clearance
+                - 🎁 Loyalty overhaul
+                - 📧 Multi-channel campaign
+                - 🔄 Product mix optimization
+                - 💼 Cost reduction
+                """)
+
+            with col2:
+                st.markdown("#### 📈 YoY Analysis")
+                
+                total = quarterly_forecast['yhat'].sum()
+                avg = quarterly_forecast['yhat'].mean()
+                
+                std = quarterly_forecast['yhat'].std()
+                volatility = (std / avg) * 100
+                
+                st.info(f"""
+                **Forecast Summary:**
+                
+                📊 **Total**: {total:,.0f} units  
+                📈 **Avg/Quarter**: {avg:,.0f} units  
+                📉 **Volatility**: {volatility:.1f}%
+                
+                **Interpretation:**
+                """)
+                
+                if volatility < 10:
+                    st.success("✅ **Stable** - Consistent demand")
+                elif volatility < 20:
+                    st.info("📊 **Moderate** - Some seasonality")
+                else:
+                    st.warning("⚠️ **High Volatility** - Strong seasonal effects")
+                    
+                if num_quarters >= 2:
+                    q1 = quarterly_forecast.iloc[0]['yhat']
+                    q_last = quarterly_forecast.iloc[-1]['yhat']
+                    trend = ((q_last - q1) / q1) * 100
+                    
+                    st.markdown("#### 🎯 Long-Term Trend")
+
+                    if trend > 10:
+                        st.success(f"📈 **Growing Market** (+{trend:.1f}%)")
+                        st.write("→ Expand capacity")
+                    elif trend > 0:
+                        st.info(f"➡️ **Stable Growth** (+{trend:.1f}%)")
+                        st.write("→ Maintain strategy")
+                    else:
+                        st.warning(f"📉 **Declining** ({trend:.1f}%)")
+                        st.write("→ Reassess fit")       
         
-    with col2:
-        st.markdown("### 🎯 Recommended Actions")
-        
-        if len(future_forecast) == 0:
-            st.warning("⚠️ No forecast data for recommendations")
-            return 
-        
-        peak_day = future_forecast.loc[future_forecast['yhat'].idxmax()]
-        peak_day_name = peak_day['ds'].strftime('%A, %d %B %Y')
-        peak_sales = int(peak_day['yhat'])
-        
-        st.success(f"""
-        **🔥 Highest Sales Day Expected**  
-        {peak_day_name}  
-        Predicted: ~{peak_sales:,} units
-        
-        **Action Items:**
-        - ✅ Increase inventory stock by {int(peak_sales * 0.3):,} units
-        - ✅ Schedule extra staff
-        - ✅ Prepare for high customer traffic
-        """)
-        
-        low_day = future_forecast.loc[future_forecast['yhat'].idxmin()]
-        low_name = low_day['ds'].strftime('%A, %d %B %Y')
-        low_sales = int(low_day['yhat'])
-        
-        st.info(f"""
-        **📉 Lowest Sales Day Expected**  
-        {low_name}  
-        Predicted: ~{low_sales:,} units
-        
-        **Action Items:**
-        - 🎯 Launch promotional offers
-        - 💰 Consider discounts (10-15%)
-        - 📦 Clear older inventory
-        """)
-        
+                
 # Business Intelligence Dashboard
 def create_business_dashboard(df, forecast, controls):
     if not controls['show_business_dashboard']:
@@ -864,7 +1204,7 @@ def display_data_explorer(df, daily_sales, controls):
         with col1:
             selected_stores = st.multiselect(
                 "Filter by Stores:",
-                options=sorted(df['store_id'].unique()),
+                options=sorted(df['store_id'].astype(str).unique()),
                 default=sorted(df['store_id'].unique())[:5],
             )
         with col2:
@@ -1449,7 +1789,6 @@ def main():
     
     # Display metrics 
     display_key_metrics(df, daily_sales)
-    st.markdown("---")
     
     # Train model 
     with st.spinner("🧠 Training forecasting model..."):
@@ -1464,37 +1803,29 @@ def main():
     
     # Create forecast chart
     forecast = create_enhanced_forecast_chart(daily_sales, model, controls)
-    st.markdown("---")
     
     # Business insights
     display_business_insights(forecast, daily_sales, controls)
-    st.markdown("---")
     
     # Business dashboard (ADD THIS)
     create_business_dashboard(df, forecast, controls)
-    st.markdown("---")
     
     # Alert system (ADD THIS)
     create_alert_system(forecast, daily_sales, controls)
-    st.markdown("---")
     
     # Model performance
     if controls['show_model_details']:
         display_model_performance(model, daily_sales, controls)
-        st.markdown("---")
     
     # Data quality report (ADD THIS)
     if controls.get('show_data_quality', False):
         create_data_quality_report(df)
-        st.markdown("---")
     
     # Data explorer
     display_data_explorer(df, daily_sales, controls)
-    st.markdown("---")
     
     # Export section
     create_export_section(forecast, daily_sales, controls)
-    st.markdown("---")
     
     st.markdown("""
     <div style='text-align: center; padding: 20px;'>
