@@ -12,14 +12,14 @@ warnings.filterwarnings('ignore')
 
 # Page Configuration
 st.set_page_config(
-    page_title="Retail Sales Forecasting Dashboard",
+    page_title="RetailVision",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
         'Get Help': 'https://docs.streamlit.io/',
         'Report a bug': None,
-        'About': "Learning Streamlit with Real Data Forecasting!"
+        'About': "RetailVision - Data-Powered Retail Sales Forecasting"
     }
 )
 
@@ -30,9 +30,10 @@ st.markdown("""
     div[data-testid="stMetricValue"] {
         font-size: 2rem;
         font-weight: 700;
-        color: #386DEC !important;
+        color: #F0F4F8 !important;
         background: none !important;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
+        letter-spacing: 0.5px;
     }
     
     /* Enhanced button styling - better visibility */
@@ -281,8 +282,8 @@ def handle_large_files(df):
         
     return df
 
-@st.cache_resource(ttl=3600)
-def train_forecasting_model(daily_sales, model_type='default', confidence_level=95, include_holidays=False, seasonal_adjustment='Auto'):
+# @st.cache_resource(ttl=3600)
+def train_forecasting_model(daily_sales, model_type='Prophet (Default)', confidence_level=95, include_holidays=False, seasonal_adjustment='Auto', holiday_country='IN'):
     split_point = int(len(daily_sales) * 0.8)
     train_data = daily_sales[:split_point]
     
@@ -311,9 +312,7 @@ def train_forecasting_model(daily_sales, model_type='default', confidence_level=
             interval_width=confidence_level / 100,
             changepoint_prior_scale=0.05
         )
-        country = st.selectbox("Holiday Region:", ["IN", "US", "UK", "AU"])
-        model.add_country_holidays(country_name=country)
-        st.info("✅ Holiday-aware model enabled")
+        model.add_country_holidays(country_name=holiday_country)
     elif model_type == "Prophet Enhanced":
         model = Prophet(
             daily_seasonality=daily_season,
@@ -328,7 +327,7 @@ def train_forecasting_model(daily_sales, model_type='default', confidence_level=
             period=30.5,
             fourier_order=5
         )
-        st.info("✅ Enabled model with flexible trend detection")
+        # st.info("✅ Enabled model with flexible trend detection")
         
     else:
         model = Prophet(
@@ -338,11 +337,11 @@ def train_forecasting_model(daily_sales, model_type='default', confidence_level=
             interval_width=confidence_level / 100,
             changepoint_prior_scale=0.05,
         )
-        st.info("✅ Standard Prophet Model")
+        # st.info("✅ Standard Prophet Model")
         
     if include_holidays and model_type == "Prophet (Default)":
-        model.add_country_holidays(country_name='IN')
-        st.info("🎉 Indian holidays included in forecast")
+        model.add_country_holidays(country_name=holiday_country)
+        # st.info("🎉 Indian holidays included in forecast")
         
     seasonality_msg = f"📊 Seasonality: "
     if daily_season:
@@ -507,6 +506,26 @@ def create_enhanced_forecast_chart(daily_sales, model, controls):
         showlegend=True,
         font=dict(size=12)
     )
+
+    if controls.get('auto_zoom_forecast', True) and controls['forecast_days'] > 30:
+
+        forecast_start = forecast['ds'][len(daily_sales):].min()
+        forecast_end = forecast['ds'].max()
+
+        buffer_days = (forecast_end - forecast_start).days * 0.1
+        forecast_start = forecast_start - pd.Timedelta(days=buffer_days)
+
+        fig.update_xaxes (
+            range=[forecast_start, forecast_end],
+            rangeselector=dict(
+                buttons=list([
+                    dict(step="all", label="All"),
+                ]),
+                bgcolor="black",
+                bordercolor="#667eea",
+                borderwidth=1
+            )
+        )
     
     st.plotly_chart(fig, use_container_width=True)
     
@@ -1600,7 +1619,13 @@ def create_enhanced_sidebar_controls():
             forecast_days = int(business_days * 1.4)
             start_date = None
             end_date = None
-    
+        
+        auto_zoom_forecast = st.checkbox(
+            "Auto-Zoom to Forecast Period",
+            value=True,
+            help="Automatically focus chart on predicted period"
+        )
+
     # Section 3: Model Settings (collapsible)
     with st.sidebar.expander("🔬 Advanced Settings", expanded=False):
         model_type = st.selectbox(
@@ -1620,6 +1645,11 @@ def create_enhanced_sidebar_controls():
         include_holidays = st.checkbox(
             "Include holidays",
             help="Account for Indian holidays"
+        )
+
+        holiday_country = st.selectbox(
+            "Holiday Region:", ["IN", "US", "UK", "AU"], 
+            index=0
         )
 
         seasonal_adjustment = st.selectbox(
@@ -1686,11 +1716,13 @@ def create_enhanced_sidebar_controls():
         'uploaded_file': uploaded_file,
         'forecast_method': forecast_method,
         'forecast_days': forecast_days,
+        'auto_zoom_forecast': auto_zoom_forecast,
         'start_date': start_date,
         'end_date': end_date,
         'model_type': model_type,
         'confidence_level': confidence_level,
         'include_holidays': include_holidays,
+        'holiday_country': holiday_country,
         'seasonal_adjustment': seasonal_adjustment,
         'show_confidence': show_confidence,
         'show_raw_data': show_raw_data,
@@ -1713,7 +1745,7 @@ def create_export_section(forecast, daily_sales, controls):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### 📊 Prediction Table")
+        st.markdown("#### 📊 Prediction Table")
         
         export_df = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(controls['forecast_days'])
         export_df.columns = ['Date', 'Expected Sales', 'Minimum', 'Maximum']
@@ -1736,7 +1768,7 @@ def create_export_section(forecast, daily_sales, controls):
         )
     
     with col2:
-        st.markdown("### 📋 Business Report")
+        st.markdown("#### 📋 Business Report")
         
         total_predicted = export_df['Expected Sales'].sum()
         avg_daily = export_df['Expected Sales'].mean()
@@ -1938,8 +1970,8 @@ def create_alert_system(forecast, daily_sales, controls):
 
 # MAIN FUNCTION
 def main():
-    st.title("📈 Retail Sales Forecasting Dashboard")
-    st.markdown("### 🎯 *Professional forecasting system for retail business intelligence*")
+    st.title("📈 RetailVision")
+    st.markdown("### 🎯 *Data-Powered Professional Forecasting System for Retail Business Intelligence*")
     st.markdown("---")
     
     # Show data requirements
@@ -1971,9 +2003,9 @@ def main():
             model_type=controls['model_type'],
             confidence_level=controls['confidence_level'],
             include_holidays=controls['include_holidays'],
-            seasonal_adjustment=controls['seasonal_adjustment']
+            seasonal_adjustment=controls['seasonal_adjustment'],
+            holiday_country=controls.get('holiday_country', 'IN')
         )
-    st.success("✅ Model trained successfully! Ready for forecasting.")
     
     # Create forecast chart
     forecast = create_enhanced_forecast_chart(daily_sales, model, controls)
@@ -2002,10 +2034,10 @@ def main():
     create_export_section(forecast, daily_sales, controls)
     
     st.markdown("""
-    <div style='text-align: center; padding: 20px;'>
-        <p style='color: #666; font-size: 14px;'>
-            💡 Built with: Streamlit 🎨 • Prophet 🔮 • Plotly 📊 • Python 🐍
-        </p>
+    ---
+    <div style='text-align: center; padding: 20px; color: #666;'>
+        <p><strong>RetailVision</strong> • Built with Streamlit 🎨 • Prophet 🔮 • Plotly 📊</p>
+        <p style='font-size: 12px;'>© 2025 • Rohit Navinchandra Kandpal</p>
     </div>
     """, unsafe_allow_html=True)    
     
